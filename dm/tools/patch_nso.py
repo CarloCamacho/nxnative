@@ -571,6 +571,14 @@ def jump_offsets(insl, j, copy_first=False, far_base=False):
         # A 64-bit check of the index bounds it as well (OCTOPATH TRAVELER 1.0.5 main+0x1676f30: cmp x22,#0x10; ...; b.hi; adrp x18 + add x18; mov x0,x18; ldrsw x18,[x0,x22,lsl #2];
         # add x18,x18,x0, the base copied, so only far_base reads it); taken only in the last attempt, so sites that rewrote before come out the same
         m = re.fullmatch(r'([wx]\d+), #(0x[0-9a-f]+|\d+)' if far_base else r'(w\d+), #(0x[0-9a-f]+|\d+)', p.op_str) if p.mnemonic == 'cmp' else None
+        # A mask bounds test in place of the compare (Return of the Obra Dinn main+0x69e2c8, Unity 2017.4 IL2CPP: tst w15,#7; b.eq;
+        # mvn w15,w15; and x15,x15,#7; ldrsw x15,[x11,x15,lsl #2]; add x18,x15,x11; br x18). It tests the same source and mask as
+        # the index's and, so the table holds mask+1 entries as it does for the cmp form. Only in the last attempt, so a site that
+        # rewrote before comes out the same
+        if not m and far_base and masked and p.mnemonic == 'tst':
+            mt = re.fullmatch(r'(w\d+), #(0x[0-9a-f]+|\d+)', p.op_str)
+            if mt and wname(mt.group(1)) == masked[0] and int(mt.group(2), 0) == masked[1]:
+                cmp = p; break
         if not m: continue
         if wname(m.group(1)) in idx: cmp = p; break
         if masked:   # the checked register must be "the same source & the same mask", with the source unchanged up to the index's and
